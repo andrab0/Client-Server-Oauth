@@ -3,12 +3,12 @@
  * si sa intorc ca raspuns token-ul de acces sau o eroare daca nu exista
  */ 
 struct req_auth_param {
-    string id_clnt<15>; /* id client */
-}
+    string id_clnt<>; /* id client */
+};
 
 struct req_auth_resp {
     string token_resp<>; /* token de acces sau eroare */
-}
+};
 
 /*
  * Pentru Request Access token ma astept sa primesc id-ul si token-ul de acces
@@ -16,15 +16,14 @@ struct req_auth_resp {
  * refresh, perioada de valabilitate tokeni si o eroare daca token-ul nu este valid
  */ 
 struct req_acc_token_param {
-    string id_clnt<15>; /* id client */
-    string token<15>; /* token de acces */
+    string id_clnt<>; /* id client */
+    string token<>; /* token de acces */
 };
 
 struct req_acc_token_resp {
     string token_rers<>; /* token de acces la resurse */
     string token_regen<>; /* token de regenerare acces */
     int per_valab; /* perioada de valabilitate tokens*/
-    string token_error<> /* eroare daca token-ul nu este valid*/;
 };
 
 /*
@@ -32,6 +31,7 @@ struct req_acc_token_resp {
  * si token-ul de acces la resursa. Imi intoarce un mesaj legat de validitatea token-ului
  */
 struct val_del_act_param {
+    string id_clnt<>; /* id-ul userului */
     string tip_op<>; /* tipul operatiei */
     string resursa<>; /* resursa accesata */
     string token_rers<>; /* token de acces la resurse */
@@ -60,4 +60,4 @@ program RPC_TEMA_PROG {
         val_del_act_resp Validate_Delegated_Action(val_del_act_param) = 3;
         app_req_resp Approve_Request_Token(app_req_param) = 4;
     } = 1;
-} = 135792468; // numar random ca sa fiu sigura ca nu e unic
+} = 135792468; /* numar random ca sa fiu sigura ca e unic */
