@@ -6,11 +6,10 @@
 # ./check.sh all -> ruleaza toate testele
 #
 # Completati/schimbati urmatoarele valori inainte de utilizare:
-SERVER_NAME=""
-SERVER_PARAMS="tests/test$1/userIDs.db tests/test$1/resources.db tests/test$1/approvals.db"
-CLIENT_NAME=""
+SERVER_NAME="server"
+SERVER_PARAMS="tests/test$1/userIDs.db tests/test$1/resources.db tests/test$1/approvals.db tests/test$1/readme"
+CLIENT_NAME="client"
 CLIENT_PARAMS="tests/test$1/client.in"
-SERVER_ADDR="localhost"
 
 if [ $# -lt 1 ]; then
     echo "./check.sh testNo([0-7]|all) [showOutput([0-1])]"
@@ -27,7 +26,7 @@ if [[ $1 =~ $numberPattern ]]; then
     ./$SERVER_NAME $SERVER_PARAMS > server.out &
     SERVER_PID=$!
     sleep 1
-    ./$CLIENT_NAME $SERVER_ADDR $CLIENT_PARAMS > client.out
+    ./$CLIENT_NAME $CLIENT_PARAMS > client.out
     kill $SERVER_PID
 
     if [ $# -gt 1 ] && [ $2 -eq 1 ]; then
@@ -68,7 +67,7 @@ else
         ./$SERVER_NAME $SERVER_PARAMS_ALL > server.out &
         SERVER_PID=$!
         sleep 1
-        ./$CLIENT_NAME $SERVER_ADDR $CLIENT_PARAMS_ALL > client.out
+        ./$CLIENT_NAME $CLIENT_PARAMS_ALL > client.out
         kill $SERVER_PID
 
         diff server.out tests/test$i/expected_output/server.out > /dev/null

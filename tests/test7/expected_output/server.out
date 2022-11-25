@@ -28,4 +28,4 @@ DENY (EXECUTE,Applications,1N0f2xd68f648di,0)
 BEGIN f80N46i82fdx61d AUTHZ REFRESH
   AccessToken = iN412fd686x0f8d
   RefreshToken = 4206Ndf68x1ifd8
-PERMIT (DELETE,Applications,iN412fd686x0f8d,2)
+DENY (11111,Applications,iN412fd686x0f8d,2)
