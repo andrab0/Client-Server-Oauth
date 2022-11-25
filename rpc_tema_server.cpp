@@ -1,201 +1,314 @@
 #include "rpc_tema_server.hpp"
-#include "rpc_tema_svc.h"
 
 req_auth_resp *request_authorization_1_svc(req_auth_param *data, struct svc_req *cl)
 {
-    static string user_id;
-    static string user_token;
+    static string userId;
+    static string requestToken;
     static req_auth_resp *response = (req_auth_resp*)malloc(sizeof(req_auth_resp));
 
     /* Preiau id-ul userului trimis ca si parametru */
-    user_id = data->id_clnt;
-    // cout<<"User id: "<<user_id<<endl;
+    userId = data->id_clnt;
 
     /* Daca userul exista, generez un nou token pentru el si il adaug in map ca si valoare */
-    cout<<"BEGIN "<<user_id<<" AUTHZ"<<endl;
+    cout<<"BEGIN "<<userId<<" AUTHZ"<<endl;
     /* Verific daca acesta exista in map */
-    const bool user_exists = check_if_user_exists(user_id);
-    if (user_exists) 
+    const bool isExistingUser = checkIfUserExists(userId);
+    if (isExistingUser)
     {
         /* Generez request token-ul */
-        user_token = generate_access_token((char*)user_id.c_str());
-        cout<<"  RequestToken = "<<user_token<<endl;
-        users_and_req_tokens.at(user_id) = user_token;
-    } 
-    else if (!user_exists)
+        requestToken = generate_access_token((char*)userId.c_str());
+        cout<<"  RequestToken = "<<requestToken<<endl;
+        usersAndReqTokens.at(userId) = requestToken;
+    }
+    else if (!isExistingUser)
     {
-        user_token = "USER_NOT_FOUND";
+        requestToken = "USER_NOT_FOUND";
     }
 
     /* Setez raspunsul */
-    response->token_resp = (char*)user_token.c_str();
+    response->token_resp = (char*)requestToken.c_str();
+    fflush(stdout);
     return response;
-    
 }
 
 req_acc_token_resp *request_access_token_1_svc(req_acc_token_param *data, struct svc_req *cl)
 {
-    static string user_id;
-    static string req_token;
-    static string acc_token;
-    static string ref_token;
+    static string userId;
+    static string requestToken;
+    static string accessToken;
+    static string refreshToken;
+    static bool isRefreshNeeded = false;
     static req_acc_token_resp *response = (req_acc_token_resp*)malloc(sizeof(req_acc_token_resp));
 
     /* Preiau id-ul userului si token-ul de request trimis ca si parametru */
-    user_id = data->id_clnt;
-    req_token = data->token;
+    userId = data->id_clnt;
+    requestToken = data->token;
 
-    /* Verific daca token-ul este semnat */
-    // const bool isTokenSigned = token_and_status.at(req_token);
-
-    // cout<<token_and_permisions.at(req_token)<<endl;
-    // permisions.pop();
-    if (token_and_permisions.at(req_token) == "*,-")
+    /* Verific daca token-ul este semnat(adica daca are permisiuni atasate) */
+    if (reqTokensAndPermisions.at(requestToken) == "*,-")
     {
-        acc_token = "REQUEST_DENIED";
+        accessToken = "REQUEST_DENIED";
     }
     else
-    // else if(token_and_permisions.at(req_token) != "*,-")
     {
         /* Generez acces token-ul */
-        acc_token = generate_access_token((char*)req_token.c_str());
-        // ref_token = generate_access_token((char*)acc_token.c_str());
-        cout<<"  AccessToken = "<<acc_token<<endl;
+        accessToken = generate_access_token((char*)requestToken.c_str());
+        cout<<"  AccessToken = "<<accessToken<<endl;
 
-        /* Adaug acces token-ul in map */   
-        if (check_if_user_exists(user_id))
+        /* Verific daca am nevoie de token de refresh */
+        if(userId.size() == 16)
         {
-            users_and_acc_tokens.at(user_id) = acc_token;
-            // token_and_refresh.insert(pair<string, string>(acc_token, ref_token));   
+            isRefreshNeeded = true;
+            userId = userId.substr(0, 15);
+        }
+
+        /* Adaug acces token-ul in map */
+        if (checkIfUserExists(userId))
+        {
+            usersAndAcceptTokens.at(userId) = accessToken;
+            refreshToken = tokenTemp;
+            accTokensAndRefTokens.insert(pair<string, string>(accessToken, refreshToken));
+
+            if (isRefreshNeeded)
+            {
+                /* Generez refresh token-ul */
+                refreshToken = generate_access_token((char*)accessToken.c_str());
+                accTokensAndRefTokens.at(accessToken) = refreshToken;
+                cout<<"  RefreshToken = "<<refreshToken<<endl;
+            }
+            else
+            {
+                refreshToken = tokenTemp;
+            }
         }
     }
 
-    ref_token = token_temp;
-
     /* Setez raspunsul */
-    response->token_rers = (char*)acc_token.c_str();
-    response->token_regen = (char*)ref_token.c_str();
-    response->per_valab = valid_time;
+    response->token_rers = (char*)accessToken.c_str();
+    response->token_regen = (char*)refreshToken.c_str();
+    response->per_valab = valability;
 
-    token_and_counter.insert(pair<string, int>(acc_token, valid_time));
-
+    accTokensAndValability.insert(pair<string, int>(accessToken, valability));
+    fflush(stdout);
     return response;
 };
 
 val_del_act_resp *validate_delegated_action_1_svc(val_del_act_param *data, struct svc_req *cl)
 {
-    return NULL;
-}
-//     string tip_operatie;
-//     string resursa;
-//     string token_acc_rers;
-//     string user_id;
-//     static val_del_act_resp *response = (val_del_act_resp*)malloc(sizeof(val_del_act_resp));
+    static string tipOperatie;
+    static string resursa;
+    static string mesaj;
+    static string accTokenForResources;
+    static val_del_act_resp *response = (val_del_act_resp*)malloc(sizeof(val_del_act_resp));
 
-//     /* Preiau tipul operatiei, resursa si token-ul de acces trimis ca si parametru */
-//     user_id = data->id_clnt;
-//     tip_operatie = data->tip_op;
-//     resursa = data->resursa;
-//     token_acc_rers = data->token_rers;
+    /* Preiau tipul operatiei, resursa si token-ul de acces trimis ca si parametru */
+    tipOperatie = data->tip_op;
+    resursa = data->resursa;
+    accTokenForResources = data->token_rers;
 
-//     response->mesaj = "PERMISSION_GRANTED";
+    /* Verific daca token-ul este valid */
+    if (accTokenForResources != tokenTemp)
+    {
+        /* Determin user-ul asociat token-ului de access */
+        const string userId = getUserWithAccesToken(accTokenForResources);
+        string requestToken = usersAndReqTokens.at(userId);
+        const bool isReceivedTokenOk = (accTokenForResources == usersAndAcceptTokens.at(userId));
+        string currApprovals = "*,-";
 
-//     /* Verific daca token-ul este valid */
-//     const string userToToken = get_user_for_token(token_acc_rers);
+        /* Verific daca am approvals disponibile */
+        if (reqTokensAndPermisions.size() != 0)
+        {
+            if (reqTokensAndPermisions.find(requestToken) != reqTokensAndPermisions.end())
+            {
+                currApprovals = reqTokensAndPermisions.at(requestToken);
+            }
+        }
 
-//     if(userToToken != user_id) {
-//         response->mesaj = "PERMISSION_DENIED";
-//     }
-    
-//     if(check_if_token_expired(token_acc_rers)) {
-//         response->mesaj = "TOKEN_EXPIRED";
-//     }
+        /* Verific daca token-ul este asociat cu utilizatorul curent */
+        if(!isReceivedTokenOk || (currApprovals == "*,-"))
+        {
+            cout<<"DENY ("<<tipOperatie<<","<<resursa<<","<<accTokenForResources<<","<<accTokensAndValability.at(accTokenForResources)<<")"<<endl;
+            mesaj = "PERMISSION_DENIED";
+            response->new_acc_token = (char*)accTokenForResources.c_str();
+            response->mesaj = (char*)mesaj.c_str();;
 
-//     if(check_if_resource_exists(resursa)) {
-//         response->mesaj = "RESOURCE_NOT_FOUND";
-//     }
+            fflush(stdout);
+            return response;
+        }
 
-//     if(check_if_permision_exists(token_acc_rers, tip_operatie)) {
-//         response->mesaj = "OPERATION_NOT_PERMITTED";
-//     }
+        /* Verific daca token-ul este expirat */
+        if (isAccTokenExpired(accTokenForResources))
+        {
+            /* Verific daca am disponibil un token de refresh */
+            const string refreshToken = accTokensAndRefTokens.at(accTokenForResources);
+            if (refreshToken != tokenTemp)
+            {
+                /* Generez noul token de acces */
+                cout<<"BEGIN "<<userId<<" AUTHZ REFRESH"<<endl;
+                const string newAccToken = generate_access_token((char*)refreshToken.c_str());
+                cout<<"  AccessToken = "<<newAccToken<<endl;
+                const string newRefreshToken = generate_access_token((char*)newAccToken.c_str());
+                cout<<"  RefreshToken = "<<newRefreshToken<<endl;
+                /* Updatez token-ul de acces in toate map-urile necesare */
+                accTokenForResources = newAccToken;
+                usersAndAcceptTokens.at(userId) = newAccToken;
+                accTokensAndRefTokens.erase(accTokenForResources);
+                accTokensAndRefTokens.insert(pair<string, string>(newAccToken, newRefreshToken));
+                accTokensAndValability.erase(accTokenForResources);
+                accTokensAndValability.insert(pair<string, int>(newAccToken, valability));
+                accTokenForResources = newAccToken;
+            }
+            else
+            {
+                cout<<"DENY ("<<tipOperatie<<","<<resursa<<","<<""<<","<<0<<")"<<endl;
+                mesaj = "TOKEN_EXPIRED";
+                response->new_acc_token = (char*)accTokenForResources.c_str();
+                response->mesaj = (char*)mesaj.c_str();;
 
-//     return response;
-// };
+                return response;
+            }
+        }
 
-app_req_resp *approve_request_token_1_svc(app_req_param *data, struct svc_req *cl)
-{
-    static string user_token;
-    static app_req_resp *response = (app_req_resp*)malloc(sizeof(app_req_resp));
+        accTokensAndValability.at(accTokenForResources) = accTokensAndValability.at(accTokenForResources) - 1;
 
-    /* Preiau tokenul trimis ca si parametru */
-    user_token = data->token_rers;
+        /* Verific daca exista resursa */
+        if(doesRerourceExist(resursa))
+        {
+            cout<<"DENY ("<<tipOperatie<<","<<resursa<<","<<accTokenForResources<<","<<accTokensAndValability.at(accTokenForResources)<<")"<<endl;
+            mesaj = "RESOURCE_NOT_FOUND";
+            response->new_acc_token = (char*)accTokenForResources.c_str();
+            response->mesaj = (char*)mesaj.c_str();;
 
-    /* Marchez tokenul ca fiind semnat daca are permisiuni */
-    const string currPermisions = permisions.front();
-    token_and_permisions.insert(pair<string, string>(user_token, currPermisions));
-    permisions.pop();
+            fflush(stdout);
+            return response;
+        }
 
-    // token_and_status.insert(pair<string, bool>(user_token, true));
+        /* Verific daca am permisiunile cerute pt resursa */
+        if (doesPermisionExist(resursa, currApprovals, tipOperatie))
+        {
+            cout<<"DENY ("<<tipOperatie<<","<<resursa<<","<<accTokenForResources<<","<<accTokensAndValability.at(accTokenForResources)<<")"<<endl;
+            mesaj = "OPERATION_NOT_PERMITTED";
+            response->new_acc_token = (char*)accTokenForResources.c_str();
+            response->mesaj = (char*)mesaj.c_str();;
 
-    /* Setez raspunsul */
-    response->token_perm = (char*)user_token.c_str();
+            fflush(stdout);
+            return response;
+        }
+    }
+    else
+    {
+        cout<<"DENY ("<<tipOperatie<<","<<resursa<<","<<""<<","<<0<<")"<<endl;
+        mesaj = "PERMISSION_DENIED";
+        response->new_acc_token = (char*)tokenTemp.c_str();
+        response->mesaj = (char*)mesaj.c_str();;
 
+        fflush(stdout);
+        return response;
+    }
+
+    cout<<"PERMIT ("<<tipOperatie<<","<<resursa<<","<<accTokenForResources<<","<<accTokensAndValability.at(accTokenForResources)<<")"<<endl;
+    response->new_acc_token = (char*)accTokenForResources.c_str();
+    response->mesaj = (char*)"PERMISSION_GRANTED";
+
+    fflush(stdout);
     return response;
 };
 
-
-bool check_if_user_exists(const string user_id) 
+app_req_resp *approve_request_token_1_svc(app_req_param *data, struct svc_req *cl)
 {
-    if ((users_and_req_tokens.find(user_id)) != (users_and_req_tokens.end())) {
-        // cout<<"  User found"<<endl;
-        return true;
-    } 
+    static string requestToken;
+    static app_req_resp *response = (app_req_resp*)malloc(sizeof(app_req_resp));
 
-    // cout<<"  User not found"<<endl;
+    /* Preiau tokenul trimis ca si parametru */
+    requestToken = data->token_rers;
+
+    /* Marchez tokenul ca fiind semnat daca are permisiuni */
+    const string currPermisions = permisions.front();
+    reqTokensAndPermisions.insert(pair<string, string>(requestToken, currPermisions));
+    permisions.pop();
+
+    /* Setez raspunsul */
+    response->token_perm = (char*)requestToken.c_str();
+
+    fflush(stdout);
+    return response;
+};
+
+bool checkIfUserExists(const string userId)
+{
+    /* Caut user-ul in cei stocati */
+    if ((usersAndReqTokens.find(userId)) != (usersAndReqTokens.end())) {
+        return true;
+    }
+
     return false;
 }
 
-// string get_user_for_token(const string acc_token)
-// {
-//     for(auto &iterator : users_and_acc_tokens) {
-//         if (iterator.second == acc_token) {
-//             return iterator.first;
-//         }
-//     }
-// }
+string getUserWithAccesToken(const string accessToken)
+{
+    /* Caut user-ul cu token-ul de acces corespondent */
+    for(auto &iterator : usersAndAcceptTokens) {
+        if (iterator.second == accessToken) {
+            return iterator.first;
+        }
+    }
+}
 
-// bool check_if_token_expired(const string acc_token)
-// {
-//     if (token_and_counter.at(acc_token) == 0) {
-//         return true;
-//     }
+bool isAccTokenExpired(const string accessToken)
+{
+    /* Verific daca token-ul de access are valabilitatea expirata */
+    if (accTokensAndValability.find(accessToken) != accTokensAndValability.end())
+    {
+        if (accTokensAndValability.at(accessToken) < 1)
+        {
+            return true;
+        }
+    }
 
-//     return false;
-// }
+    return false;
+}
 
-// bool check_if_resource_exists(const string resource)
-// {
-//     for (auto &iterator : resource_and_permisions) {
-//         if (iterator == resource) {
-//             return true;
-//         }
-//     }
+bool doesRerourceExist(const string resource)
+{
+    /* Verific daca resursa exista in cele stocate */
+    if (find(resources.begin(), resources.end(), resource) == resources.end()) {
+        return true;
+    }
 
-//     return false;
-// }
+    return false;
+}
 
-// bool check_if_permision_exists(const string acc_token, const string permision)
-// {
-//     for (auto &iterator : token_and_permisions.at(acc_token)) {
-//         if (iterator == permision) {
-//             return true;
-//         }
-//     }
+bool doesPermisionExist(const string resource, const string availableRers, const string operation)
+{
+    /* Preiau resursele si permisiunile curente */
+    const int indexResource = availableRers.find(resource);
+    if (indexResource != -1)
+    {
+        const int start = indexResource + resource.length() + 1;
+        const string availablePermisions = availableRers.substr(start, availableRers.find(",", start) - start);
+        if (opTypeAndCode.find(operation) != opTypeAndCode.end())
+        {
+            const char opCurenta = opTypeAndCode.at(operation);
 
-//     return false;
-// }
+            /* Verific daca permisiunea exista */
+            if ((availablePermisions.find(opCurenta) == string::npos) || (availableRers == "*,-")) {
+                return true;
+            }
+        }
+        else
+        {
+            /* Tipul operatiei este invalid */
+            return true;
+        }
+    }
+    else
+    {
+        /* Resursa nu exista in setul de permisiuni */
+        return true;
+    }
 
-
+    return false;
+}
 
 int main (int argc, char **argv)
 {
@@ -223,8 +336,8 @@ int main (int argc, char **argv)
         string userId;
         clientsFile>>userId;
         /* Initializez map-urile pe care le voi folosi ulterior */
-        users_and_req_tokens.insert(pair<string, string>(userId, token_temp));
-        users_and_acc_tokens.insert(pair<string, string>(userId, token_temp));
+        usersAndReqTokens.insert(pair<string, string>(userId, tokenTemp));
+        usersAndAcceptTokens.insert(pair<string, string>(userId, tokenTemp));
     }
     clientsFile.close();
 
@@ -277,10 +390,17 @@ int main (int argc, char **argv)
         string line;
         getline(tokenAvailabilityFile, line);
         line = line[line.size() - 1];
-        valid_time = stoi(line);
+        valability = stoi(line);
 
         tokenAvailabilityFile.close();
     }
+
+    /* Initializez map-ul cu operatiile si codurile asociate */
+    opTypeAndCode.insert(pair<string, char>("READ", 'R'));
+    opTypeAndCode.insert(pair<string, char>("INSERT", 'I'));
+    opTypeAndCode.insert(pair<string, char>("MODIFY", 'M'));
+    opTypeAndCode.insert(pair<string, char>("DELETE", 'D'));
+    opTypeAndCode.insert(pair<string, char>("EXECUTE", 'X'));
 
 	transp = svcudp_create(RPC_ANYSOCK);
 	if (transp == NULL) {

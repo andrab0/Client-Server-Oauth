@@ -8,14 +8,17 @@ int main(int argc, char const *argv[])
 {
     CLIENT *handle;
     /* Structuri necesare pentru request_authorization */
-    req_auth_param req_auth_param_1_arg;
-    req_auth_resp *req_auth_1_arg_res;
+    req_auth_param reqAuthParam;
+    req_auth_resp *reqAuthResp;
     /* Structuri necesare pentru approve_request_token  */
-    app_req_param app_req_param_1_arg;
-    app_req_resp *app_req_resp_1_res;
+    app_req_param approveReqParam;
+    app_req_resp *approveReqResp;
     /* Structuri necesare pentru request_access_token */
-    req_acc_token_param req_acc_token_param_1_arg;
-    req_acc_token_resp *req_acc_token_resp_1_res;
+    req_acc_token_param reqAccessTokenParam;
+    req_acc_token_resp *reqAccessTokenResp;
+    /* Structuri necesare pentru validate_delegated_action */
+    val_del_act_param validDelActParam;
+    val_del_act_resp *validDelActResp;
 
     /* Verific daca am primit fisier de input */
     if (argc != 2) {
@@ -31,57 +34,79 @@ int main(int argc, char const *argv[])
         exit(1);
     }
 
-    ifstream opfile(argv[1]);
+    ifstream opFile(argv[1]);
     /* Verific daca fisierul meu s-a deschis ok */
-    if(!opfile.is_open())
+    if(!opFile.is_open())
     {
         cout<<"Eroare la deschiderea fisierului de operatii!"<<endl;
         return -1;
     }
 
     /* Citesc linie cu linie din fisierul de operatii */
-    while(!opfile.eof())
+    while(!opFile.eof())
     {
         string line;
-        getline(opfile, line);
+        getline(opFile, line);
         lines.push_back(line);
     }
 
     for(long unsigned int i = 0; i < lines.size(); i++)
     {
-        /* extrag id-ul utilizatorului */
-        const string user_id = lines[i].substr(0, 15);
+        /* Extrag id-ul utilizatorului */
+        const string userId = lines[i].substr(0, 15);
+        usersAndAccessTokens.insert(pair<string, string>(userId, tokenTemp));
 
-        /* extrag tipul operatiei*/
+        /* Extrag tipul operatiei */
         const string operation = lines[i].substr(16, lines[i].find(",", 16) - 16);
         if (operation == "REQUEST")
         {
-            /* extrag daca este disponibil refresh-ul */
+            /* Extrag daca este necesar refresh-ul token-ului de acces */
             const char isRefreshAvaliable = lines[i].at(lines[i].size() - 1);
 
-            /* Apelez procedura de request_authorization*/
-            req_auth_param_1_arg.id_clnt = (char*)user_id.c_str();
-            req_auth_1_arg_res = request_authorization_1(&req_auth_param_1_arg, handle);
-            app_req_param_1_arg.token_rers = strdup(req_auth_1_arg_res->token_resp);
+            /* Apelez procedura de request_authorization */
+            reqAuthParam.id_clnt = (char*)userId.c_str();
+            reqAuthResp = request_authorization_1(&reqAuthParam, handle);
+            approveReqParam.token_rers = strdup(reqAuthResp->token_resp);
 
             /* Semnez tokenul si atasez permisiuni */
-            if (strcmp(req_auth_1_arg_res->token_resp, "USER_NOT_FOUND") != 0)
+            if (strcmp(reqAuthResp->token_resp, "USER_NOT_FOUND") != 0)
             {
                 /* Apelez procedura de approve_request_token */
-                app_req_resp_1_res = approve_request_token_1(&app_req_param_1_arg, handle);
+                approveReqResp = approve_request_token_1(&approveReqParam, handle);
 
                 /* Apelez procedura de request_authorization */
-                req_acc_token_param_1_arg.id_clnt = (char*)user_id.c_str();
-                req_acc_token_param_1_arg.token = strdup(app_req_resp_1_res->token_perm);
-                req_acc_token_resp_1_res = request_access_token_1(&req_acc_token_param_1_arg, handle);
+                const bool isRefreshNeeded = (isRefreshAvaliable == '1');
+                if(!isRefreshNeeded)
+                {
+                    reqAccessTokenParam.id_clnt = (char*)userId.c_str();
+                    reqAccessTokenParam.token = strdup(approveReqResp->token_perm);
+                    reqAccessTokenResp = request_access_token_1(&reqAccessTokenParam, handle);
+                }
+                else
+                {
+                    /* Daca am nevoie de token de refresh, modific id-ul user-ului adaugand 1 la final */
+                    const string userIdTemp = userId + isRefreshAvaliable;
+                    reqAccessTokenParam.id_clnt = (char*)userIdTemp.c_str();
+                    reqAccessTokenParam.token = strdup(approveReqResp->token_perm);
+                    reqAccessTokenResp = request_access_token_1(&reqAccessTokenParam, handle);
+                }
 
-                if (strcmp(req_acc_token_resp_1_res->token_rers, "REQUEST_DENIED") == 0)
+                if (strcmp(reqAccessTokenResp->token_rers, "REQUEST_DENIED") == 0)
                 {
                     cout<<"REQUEST_DENIED"<<endl;
                 }
                 else
                 {
-                    cout<<app_req_resp_1_res->token_perm<<" -> "<<req_acc_token_resp_1_res->token_rers<<endl;
+                    usersAndAccessTokens.at(userId) = reqAccessTokenResp->token_rers;
+                    cout<<approveReqResp->token_perm<<" -> "<<reqAccessTokenResp->token_rers;
+                    if (isRefreshNeeded)
+                    {
+                        cout<<","<<reqAccessTokenResp->token_regen<<endl;
+                    }
+                    else
+                    {
+                        cout<<endl;
+                    }
                 }
             }
             else
@@ -92,12 +117,26 @@ int main(int argc, char const *argv[])
 
         if (operation != "REQUEST")
         {
-            /* preiau resursa pe care vreau sa aplic operatia */
+            /* Preiau resursa pe care vreau sa aplic operatia */
             const string resource = lines[i].substr(lines[i].find(",", 16) + 1, lines[i].size());
+            validDelActParam.tip_op = (char*)operation.c_str();
+            validDelActParam.resursa = (char*)resource.c_str();
+            validDelActParam.token_rers = (char*)usersAndAccessTokens.at(userId).c_str();
+            /* Apelez procedura de validate_delegated_action */
+            validDelActResp = validate_delegated_action_1(&validDelActParam, handle);
+            cout<<validDelActResp->mesaj<<endl;
+
+            if (validDelActResp->new_acc_token != usersAndAccessTokens.at(userId))
+            {
+                usersAndAccessTokens.at(userId) = validDelActResp->new_acc_token;
+            }
         }
     }
 
-    /* Inchid fisierul deschis */ 
-    opfile.close();
+    /* Inchid fisierul deschis */
+    opFile.close();
+    /* Eliberez memoria folosita */
+    clnt_destroy(handle);
+    fflush(stdout);
     return 0;
 }

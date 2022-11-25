@@ -1,6 +1,6 @@
 RPC = rpcgen
 CC = g++
-CFLAGS = -lnsl -Wall -g -Wno-unused-variable
+CFLAGS = -lnsl -Wall -g -Wno-unused-variable -Wno-return-type
 PROGRAM = rpc_tema
 SRC_SERVER = $(PROGRAM)_svc.h $(PROGRAM)_xdr.c
 SRC_CLIENT = $(PROGRAM)_clnt.c $(PROGRAM)_xdr.c

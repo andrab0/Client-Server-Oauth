@@ -1,9 +1,0 @@
-BEGIN X5B0TWjmeNtU3vd AUTHZ
-  RequestToken = v53teNBmWTXjUd0
-BEGIN X5B0TWjmeNtU3vd AUTHZ
-  RequestToken = d3v5mN0jeWXUBTt
-BEGIN QHmJh2xwErPDcmv AUTHZ
-  RequestToken = vmmxcwDH2QhPrJE
-  AccessToken = 
-BEGIN f80N46i82fdx61d AUTHZ
-  RequestToken = 6fx4i628d0fdN18

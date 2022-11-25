@@ -1,1 +1,106 @@
-Numar operatii expirare jeton de acces = 3
+Nume: Bordincel Andra-Maria
+Grupa: 342C3
+Titlu tema: Aplicatie Client/Server pentru autorizare OAuth folosind RPC
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                                Compilare
+
+Folosind comanda make din Makefile
+Aceasta genereaza fisierele necesaere si compileaza server-ul si client-ul. In
+makefile, pentru regula de rpc am ales sa sterg fisierul svc.c generat cu rpcgen
+deoarece am ales sa imi construiesc propriul main in server si am optat pentru
+generarea unui fisier svc.h in care nu am main.
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                            Fisiere modificate
+
+-> Checker:
+Aici am completat campurile pentru Server si Client si am eliminat campul de
+ServerAddress deoarece in client folosesc direct localhost.
+
+-> Teste:
+Pentru testul 1 am adaugat un fisier readme similar celor existente in restul
+testelor fiindu-mi necesar pentru rularea server-ului de catre checker.
+In rest, in teste am adaugat cate un new_line la finalul fisierelor de output
+pentru verificare.
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                                Implementare
+
+Voi detalia destul de pe scurt aici deoarece in toate fisierele implementate
+exista comentarii in cod cu mai multe detalii legate de workflow.
+
+-> rpc_tema.x:
+Definesc toate structurile necesare pentru parametrii si raspunsul fiecarei
+proceduri din enunt. Majoritatea constau doar in cate un string, pe cand cele
+asociate procedurilor ce necesita mai multe date au mai multe string-uri, iar
+cea asociata raspunsului de la Request Access Token are si un int corespunzator
+perioadei de valabilitate a token-ului de access.
+
+-> Client:
+    rulare ./client fisier_operatii
+
+Creez un handle de tip client si apoi citesc din fisierul de operatii intr-un
+vector linie cu linie.
+Incep sa parsez fiecare linie din vector pentru a obtine userId-ul, operatia
+si daca are nevoie de refresh sau nu sau resursa pe care se vrea efectuarea
+unei operatii.
+Dupa ce am obtinut userId-ul, il introduc intr-un map la care asociez un
+token de access temporar.
+Daca am o operatie de tip REQUEST fac un apel de tip Request Authorization
+pentru a obtine un token de request. Daca primesc USER_NOT_FOUND afisez
+acest lucru. Daca nu, continui prin efectuarea unui apel de tip Approve
+Request Token, folosind token-ul de request. Mai departe continui printr-un
+apel Request Access Token. Daca se doreste reinoirea automata a token-ului,
+adaug la userId caracterul 1 pentru a-i creste dimensiunea la 16. Am ales
+aceasta optiune deoarece mi s-a parut mai elegant decat adaugarea unui nou
+camp in structura de parametrii. Dupa efectuarea apelului procedurii, in
+cazul in care primesc ca si raspuns REQUEST_DENIED afisez acest lucru. Daca nu
+afisez refreshTokenul si accessTokenul si daca s-a generat, afisez si
+refreshTokenul. Fac update bineinteles si in map-ul mentionat cu accessTokenul
+pentru user-ul curent.
+Daca am orice alta operatie in afara de request, apelez procedura Validate
+Delegated Action, dupa care printez mesajul obtinut din aceasta si in cazul
+in care s-a intamplat si refresh-ul token-ului de access, fac update la
+valoarea sa pentru user-ul curent.
+La final inchid fisierul de citire, distrug handle-ul si fac un fflush(stdout)
+pentru a evita problemele de afisare.
+
+-> Server:
+    rulare: ./server fisier_clienti fisier_resurse fisier_aprobari fisier_val
+
+In main incep prin a stoca datele din fisierele de intrare in diferite structuri
+de date. Clientii ii adaug in 2 map-uri, unul care sa faca corespondenta intre
+user si requestToken si unul care sa faca corespondenta intre user si accessToken.
+Pentru requestToken si accessToken la moment folosesc tot un token temporar.
+Fisierul de resurse il stochez intr-un vector pentru o parcurgere usoara.
+Fisierul de aprobari il stochez intr-un queue pentru a putea elimina usor o
+linie odata ce aceasta a fost asignata unui requestToken, iar valabilitatea unui
+accessToken o iau din ultimul fisier si o salvez intr-un int. Toate cele de aici
+sunt variabile globale. De asemenea mai folosesc un map pentru tipurile de
+operatii si codurile asociate(Read-R, Insert-I, Modify-M, Delete-D, Execute-X).
+Pentru Request Authorization preiau Id-ul utilizatorului, verific daca corespunde
+cu unul din cei stocati in usersAndReqTokens si generez un request token daca da,
+iar daca nu, voi intoarce mesajul USER_NOT_FOUND.
+Pentru Approve Request Token semnarea requestToken token-ului am ales sa o fac
+doar prin atasarea setului de permisiuni corespondent si sa intorc token-ul
+neschimbat. Odata ce am atasat un set de permisiuni fac un pop din coada in care
+au fost stocate pentru a evita asocierea lor pentru alt user.
+Pentru Request Access Token verific daca setul de permisiuni atasat
+requestToken-ului primit este "*,-". In acest caz mesajul intors va fi
+REQUEST_DENIED si nu va fi generat niciun accessToken. Daca este vorba de un
+set de permisiuni valid, voi verifica mai departe daca userId-ul primit are
+lungimea de 16 caractere. Daca da, inseamna ca voi genera atat accessToken cat
+si refreshToken. In caz contrar, voi genera doar accessToken si pentru cel de
+refresh voi asigna valoarea token-ului temporar. Voi face update pentru access
+token in usersAndAcceptTokens si voi insera cei doi tokeni definiti in
+accTokensAndRefTokens.
+Pentru Validate Delegated Action verific daca token-ul de access este unul
+cu valoarea celui temporar, caz in care inseamna ca nu a fost generat deci
+voi intoarce direct PERMISSION_DENIED. Daca token-ul este ok, fac verificarile
+conform enuntului si intorc mesajele corespunzatoare. Cel mai delicat este
+cazul in care verific daca token-ul este expirat. Daca acesta are o valoare
+de refresh asociata in accTokensAndRefTokens voi genera noul token de access
+si pe cel de refresh si voi updata toate structurile in care sunt utilizate,
+iar daca nu pur si simplu se seteaza mesajul.
+Functiile auxiliare au comentarii explicite in cod.
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
